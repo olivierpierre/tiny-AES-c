@@ -1,0 +1,151 @@
+#include "aes-comp.h"
+
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+// prints string as hex
+static void phex(uint8_t* str)
+{
+
+#if defined(AES256)
+    uint8_t len = 32;
+#elif defined(AES192)
+    uint8_t len = 24;
+#elif defined(AES128)
+    uint8_t len = 16;
+#endif
+
+    unsigned char i;
+    for (i = 0; i < len; ++i)
+        printf("%.2x", str[i]);
+    printf("\n");
+}
+
+int main() {
+    aes_comp_msg msg;
+    uint8_t *buffer;
+    int server_fd, client_fd;
+    struct sockaddr_un addr;
+
+    // Remove any existing socket file
+    unlink(SOCKET_PATH);
+
+    server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("socket");
+        return -1;
+    }
+
+     // Set up the socket address structure
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    // Bind the socket
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        return -1;
+    }
+
+    // Listen for a connection
+    if (listen(server_fd, 1) < 0) {
+        perror("listen");
+        exit(1);
+    }
+
+    // Accept a connection
+    client_fd = accept(server_fd, NULL, NULL);
+    if (client_fd < 0) {
+        perror("accept");
+        exit(1);
+    }
+
+    int stop_server = 0;
+
+    printf("server running\n");
+    while(!stop_server) {
+
+        // Receive data
+        int r = read(client_fd, &msg, sizeof(msg));
+        if(r == -1) {
+            printf("error reading request\n");
+            break;
+        }
+
+        switch(msg.type) {
+            case AES_COMP_MSG_INIT: {
+                // printf("received request for AES_init_ctx\n");
+
+                aes_comp_init_msg *init = &msg.msg.init;
+                AES_init_ctx(&(init->ctx), init->key);
+
+                if(write(client_fd, &msg, sizeof(msg)) == -1) {
+                    perror("write");
+                    break;
+                }
+                break;
+            }
+
+            // case AES_COMP_MSG_INIT_IV: {
+            //     aes_comp_init_msg init = msg.msg.init;
+            //     AES_init_ctx_iv(&init.ctx, init.key, init.iv);
+            //     break;
+            // }
+
+            // case AES_COMP_MSG_SET_IV: {
+            //     aes_comp_init_msg init = msg.msg.init;
+            //     AES_ctx_set_iv(&init.ctx, init.iv);
+            //     break;
+            // }
+
+            case AES_COMP_MSG_ECB_ENCRYPT: {
+                // printf("received request for AES_ECB_encrypt\n");
+                aes_comp_crypt_msg crypt = msg.msg.crypt;
+
+                // allocate and receive buffer
+                buffer = malloc(crypt.buflen);
+                if(!buffer) {
+                    perror("malloc");
+                    break;
+                }
+
+                if (read(client_fd, buffer, crypt.buflen) == -1) {
+                    perror("read");
+                    break;
+                }
+
+
+                AES_ECB_encrypt(&crypt.ctx, buffer);
+
+                // send result
+
+                if (write(client_fd, &msg, sizeof(msg)) == -1) {
+                    perror("write");
+                    break;
+                }
+
+                if (write(client_fd, buffer, crypt.buflen) == -1) {
+                    perror("write");
+                    break;
+                }
+
+                break;
+            }
+
+            case AES_COMP_MSG_EXIT: {
+                stop_server = 1;
+                break;
+            }
+        }
+
+    }
+
+    close(client_fd);
+    close(server_fd);
+    unlink(SOCKET_PATH);
+
+    return 0;
+}

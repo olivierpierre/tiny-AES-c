@@ -22,10 +22,28 @@ INCLUDE_PATH = /usr/lib/avr/include
 # splint static check
 SPLINT       = splint test.c aes.c -I$(INCLUDE_PATH) +charindex -unrecog
 
-default: test.elf
+default: pierre-test aes-comp test.elf
 
-.SILENT:
+# .SILENT:
 .PHONY:  lint clean
+
+# aes-comp: aes-comp.c aes-comp.h aes.h aes.c
+# 	$(CC) $(CFLAGS) aes-comp.c aes.c -o $@ $(LDFLAGS)
+
+aes-comp.o: aes-comp.c aes-comp.h aes.h
+	$(CC) $(CFLAGS) -o $@ $<
+
+aes-comp: aes-comp.o aes.o
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+aes-comp-client.o: aes-comp-client.c aes-comp.h
+	$(CC) $(CFLAGS) -o $@ $<
+
+pierre-test.o: pierre-test.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+pierre-test: pierre-test.o aes-comp-client.o
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 test.hex : test.elf
 	echo copy object-code to new image and format in hex

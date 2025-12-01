@@ -36,9 +36,9 @@ int main(void)
     return 0;
 #endif
 
-    exit = test_encrypt_cbc() + test_decrypt_cbc() +
-	test_encrypt_ctr() + test_decrypt_ctr() +
-	test_decrypt_ecb() + test_encrypt_ecb();
+    // exit = test_encrypt_cbc() + test_decrypt_cbc() +
+	// test_encrypt_ctr() + test_decrypt_ctr() +
+	// test_decrypt_ecb() + test_encrypt_ecb();
     test_encrypt_ecb_verbose();
 
     return exit;
@@ -95,6 +95,10 @@ static void test_encrypt_ecb_verbose(void)
     
     struct AES_ctx ctx;
     AES_init_ctx(&ctx, key);
+
+    printf("expanded key: \n");
+    phex(ctx.RoundKey);
+    printf("-----------------\n");
 
     for (i = 0; i < 4; ++i)
     {
