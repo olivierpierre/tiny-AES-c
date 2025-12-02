@@ -17,22 +17,21 @@ int aes_pid;
 
 
 // prints string as hex
-static void phex(uint8_t* str)
-{
+// static void phex(uint8_t* str) {
 
-#if defined(AES256)
-    uint8_t len = 32;
-#elif defined(AES192)
-    uint8_t len = 24;
-#elif defined(AES128)
-    uint8_t len = 16;
-#endif
+// #if defined(AES256)
+//     uint8_t len = 32;
+// #elif defined(AES192)
+//     uint8_t len = 24;
+// #elif defined(AES128)
+//     uint8_t len = 16;
+// #endif
 
-    unsigned char i;
-    for (i = 0; i < len; ++i)
-        printf("%.2x", str[i]);
-    printf("\n");
-}
+//     unsigned char i;
+//     for (i = 0; i < len; ++i)
+//         printf("%.2x", str[i]);
+//     printf("\n");
+// }
 
 int wait_for_socket() {
     struct stat buffer;
@@ -101,14 +100,14 @@ void init() {
     printf("initializing compartment...\n");
 
     if(start_server()) {
-        printf("ERROR: cannot start tinyexpr compartment...\n");
+        printf("ERROR: cannot start AES compartment...\n");
         exit(-1);
     }
 
     printf("sever start OK\n");
 
     if(init_connection()) {
-        printf("ERROR: cannot init connection with tinyexpr compartment...\n");
+        printf("ERROR: cannot init connection with AES compartment...\n");
         exit(-1);
     }
 
@@ -144,6 +143,44 @@ void AES_init_ctx(struct AES_ctx* ctx, const uint8_t* key) {
     memcpy(ctx, &msg.msg.init.ctx, sizeof(struct AES_ctx));
 }
 
+void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv) {
+    aes_comp_msg msg;
+    msg.type = AES_COMP_MSG_INIT_IV;
+    memcpy(msg.msg.init.key, key, AES_KEYLEN);
+    memcpy(msg.msg.init.iv, iv, AES_BLOCKLEN);
+
+    if (write(sock, &msg, sizeof(msg)) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    if (read(sock, &msg, sizeof(msg)) == -1) {
+        perror("read");
+        exit(-1);
+    }
+
+    memcpy(ctx, &msg.msg.init.ctx, sizeof(struct AES_ctx));
+}
+
+void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv) {
+    aes_comp_msg msg;
+    msg.type = AES_COMP_MSG_SET_IV;
+    memcpy(&msg.msg.init.ctx, ctx, sizeof(struct AES_ctx));
+    memcpy(msg.msg.init.iv, iv, AES_BLOCKLEN);
+
+    if (write(sock, &msg, sizeof(msg)) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    if (read(sock, &msg, sizeof(msg)) == -1) {
+        perror("read");
+        exit(-1);
+    }
+
+    memcpy(ctx, &msg.msg.init.ctx, sizeof(struct AES_ctx));
+}
+
 void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf) {
     aes_comp_msg msg;
     msg.type = AES_COMP_MSG_ECB_ENCRYPT;
@@ -164,18 +201,69 @@ void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf) {
         exit(-1);
     }
 
-    // Receiving the response is also a two stage process, here I'm making the
-    // assumption that ctx may be modified by the call... maybe the first
-    // message is not needed TODO it's not modified it's const ...
-
-    // read response message
-    if (read(sock, &msg, sizeof(msg)) == -1) {
+    // read response buffer
+    if (read(sock, buf, AES_BLOCKLEN) == -1) {
         perror("read");
+        exit(-1);
+    }
+}
+
+void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf) {
+    aes_comp_msg msg;
+    msg.type = AES_COMP_MSG_ECB_DECRYPT;
+    memcpy(&msg.msg.crypt.ctx, ctx, sizeof(struct AES_ctx));
+
+    // here the buffer size is always AES_BLOCKLEN
+    msg.msg.crypt.buflen = AES_BLOCKLEN;
+
+    // send message
+    if (write(sock, &msg, sizeof(msg)) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // send buffer
+    if (write(sock, buf, AES_BLOCKLEN) == -1) {
+        perror("write");
         exit(-1);
     }
 
     // read response buffer
-    if (read(sock, buf, msg.msg.crypt.buflen) == -1) {
+    if (read(sock, buf, AES_BLOCKLEN) == -1) {
+        perror("read");
+        exit(-1);
+    }
+}
+
+void AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+    aes_comp_msg msg;
+    msg.type = AES_COMP_MSG_ECB_DECRYPT;
+    memcpy(&msg.msg.crypt.ctx, ctx, sizeof(struct AES_ctx));
+
+    msg.msg.crypt.buflen = length;
+
+    // send message
+    if (write(sock, &msg, sizeof(msg)) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // send buffer
+    if (write(sock, buf, length) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // read response ctx: contrary to ECB this is needed here because the call
+    // will update the IV which is part of ctx
+    if (read(sock, &msg, sizeof(msg)) == -1) {
+        perror("read");
+        exit(-1);
+    }
+    memcpy(ctx, &msg.msg.crypt.ctx, sizeof(struct AES_ctx));
+
+    // read response buffer
+    if (read(sock, buf, length) == -1) {
         perror("read");
         exit(-1);
     }

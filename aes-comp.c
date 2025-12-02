@@ -89,11 +89,11 @@ int main() {
                 break;
             }
 
-            // case AES_COMP_MSG_INIT_IV: {
-            //     aes_comp_init_msg init = msg.msg.init;
-            //     AES_init_ctx_iv(&init.ctx, init.key, init.iv);
-            //     break;
-            // }
+            case AES_COMP_MSG_INIT_IV: {
+                aes_comp_init_msg init = msg.msg.init;
+                AES_init_ctx_iv(&init.ctx, init.key, init.iv);
+                break;
+            }
 
             // case AES_COMP_MSG_SET_IV: {
             //     aes_comp_init_msg init = msg.msg.init;
@@ -117,21 +117,77 @@ int main() {
                     break;
                 }
 
-
                 AES_ECB_encrypt(&crypt.ctx, buffer);
 
-                // send result
-
-                if (write(client_fd, &msg, sizeof(msg)) == -1) {
-                    perror("write");
-                    break;
-                }
-
+                // send result: we just need to send back the encrypted buffer 
                 if (write(client_fd, buffer, crypt.buflen) == -1) {
                     perror("write");
                     break;
                 }
 
+                free(buffer);
+                break;
+            }
+
+            case AES_COMP_MSG_ECB_DECRYPT: {
+                // printf("received request for AES_ECB_decrypt\n");
+                aes_comp_crypt_msg crypt = msg.msg.crypt;
+
+                // allocate and receive buffer
+                buffer = malloc(crypt.buflen);
+                if(!buffer) {
+                    perror("malloc");
+                    break;
+                }
+
+                if (read(client_fd, buffer, crypt.buflen) == -1) {
+                    perror("read");
+                    break;
+                }
+
+                AES_ECB_decrypt(&crypt.ctx, buffer);
+
+                // send decrypted buffer 
+                if (write(client_fd, buffer, crypt.buflen) == -1) {
+                    perror("write");
+                    break;
+                }
+
+                free(buffer);
+                break;
+            }
+
+            case AES_COMP_MSG_CBC_ENCRYPT: {
+                // printf("received request for AES_CBC_encrypt\n");
+                aes_comp_crypt_msg crypt = msg.msg.crypt;
+
+                // allocate and receive buffer
+                buffer = malloc(crypt.buflen);
+                if(!buffer) {
+                    perror("malloc");
+                    break;
+                }
+
+                if (read(client_fd, buffer, crypt.buflen) == -1) {
+                    perror("read");
+                    break;
+                }
+
+                AES_CBC_encrypt_buffer(&crypt.ctx, buffer, crypt.buflen);
+
+                // send result ctx
+                if (write(client_fd, &msg, sizeof(msg)) == -1) {
+                    perror("write");
+                    break;
+                }
+
+                // send encrypted buffer 
+                if (write(client_fd, buffer, crypt.buflen) == -1) {
+                    perror("write");
+                    break;
+                }
+
+                free(buffer);
                 break;
             }
 

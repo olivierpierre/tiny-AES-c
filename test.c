@@ -38,7 +38,8 @@ int main(void)
 
     // exit = test_encrypt_cbc() + test_decrypt_cbc() +
 	// test_encrypt_ctr() + test_decrypt_ctr() +
-	// test_decrypt_ecb() + test_encrypt_ecb();
+	// test_decrypt_ecb() + test_encrypt_ecb(); 
+    exit = test_encrypt_ecb(); 
     test_encrypt_ecb_verbose();
 
     return exit;

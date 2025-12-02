@@ -12,6 +12,8 @@ typedef enum {
     AES_COMP_MSG_INIT_IV,
     AES_COMP_MSG_SET_IV,
     AES_COMP_MSG_ECB_ENCRYPT,
+    AES_COMP_MSG_ECB_DECRYPT,
+    AES_COMP_MSG_CBC_ENCRYPT,
     AES_COMP_MSG_EXIT
 } aes_comp_msg_t;
 
@@ -20,7 +22,7 @@ typedef enum {
 typedef struct {
     struct AES_ctx ctx;
     uint8_t key[AES_KEYLEN];
-    const uint8_t iv[AES_BLOCKLEN];
+    uint8_t iv[AES_BLOCKLEN];
 } aes_comp_init_msg;
 
 // encrypt/decrypt is a two phase operation: first we send this message
