@@ -27,9 +27,6 @@ default: test.elf aes-comp
 # .SILENT:
 .PHONY:  lint clean
 
-# aes-comp: aes-comp.c aes-comp.h aes.h aes.c
-# 	$(CC) $(CFLAGS) aes-comp.c aes.c -o $@ $(LDFLAGS)
-
 aes-comp.o: aes-comp.c aes-comp.h aes.h
 	$(CC) $(CFLAGS) -o $@ $<
 
@@ -43,7 +40,7 @@ test.hex : test.elf
 	echo copy object-code to new image and format in hex
 	$(OBJCOPY) ${OBJCOPYFLAGS} $< $@
 
-test.o : test.c aes.h aes-comp-client.h aes.o
+test.o : test.c aes.h aes-comp-client.h aes.o aes-comp-client.h
 	echo [CC] $@ $(CFLAGS)
 	$(CC) $(CFLAGS) -o  $@ $<
 

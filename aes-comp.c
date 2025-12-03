@@ -1,3 +1,7 @@
+// This is the compartment code: it implements the compartmentalised library.
+// It receives requests from a client program through a socket and execute
+// library calls on its behalf, sending the results back over the socket.
+
 #include "aes-comp.h"
 
 #include <sys/socket.h>
@@ -5,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <err.h>
 
 int main() {
     aes_comp_msg msg;
@@ -16,10 +21,8 @@ int main() {
     unlink(SOCKET_PATH);
 
     server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        perror("socket");
-        return -1;
-    }
+    if (server_fd < 0)
+        errx(-1, "compartment socket");
 
      // Set up the socket address structure
     memset(&addr, 0, sizeof(addr));
@@ -27,225 +30,103 @@ int main() {
     strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
     // Bind the socket
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind");
-        return -1;
-    }
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+        errx(-1, "compartment bind");
 
     // Listen for a connection
-    if (listen(server_fd, 1) < 0) {
-        perror("listen");
-        exit(1);
-    }
+    if (listen(server_fd, 1) < 0)
+        errx(-1, "compartment listen");
 
     // Accept a connection
     client_fd = accept(server_fd, NULL, NULL);
-    if (client_fd < 0) {
-        perror("accept");
-        exit(1);
-    }
+    if (client_fd < 0)
+        errx(-1, "compartment accept");
 
     int stop_server = 0;
 
-    printf("server running\n");
+    printf("compartment running\n");
     while(!stop_server) {
 
-        // Receive data
-        int r = read(client_fd, &msg, sizeof(aes_comp_msg));
-        if(r == -1) {
-            printf("error reading request\n");
-            break;
-        }
+        // Receive request message
+        if(read(client_fd, &msg, sizeof(aes_comp_msg)) == -1)
+            errx(-1, "compartment reading message");
 
         switch(msg.type) {
             case AES_COMP_MSG_INIT: {
-                // printf("received request for AES_init_ctx\n");
+                // AES_init_ctx
 
                 aes_comp_init_msg *init = &msg.msg.init;
                 AES_init_ctx(&(init->ctx), init->key);
 
-                if(write(client_fd, &msg, sizeof(aes_comp_msg)) == -1) {
-                    perror("write");
-                    break;
-                }
+                if(write(client_fd, &msg, sizeof(aes_comp_msg)) == -1)
+                    errx(-1, "compartment write responding to AES_init_ctx");
+
                 break;
             }
 
             case AES_COMP_MSG_INIT_IV: {
+                // AES_ctx_set_iv
+
                 aes_comp_init_msg *init = &msg.msg.init;
                 AES_init_ctx_iv(&(init->ctx), init->key, init->iv);
 
-                if(write(client_fd, &msg, sizeof(aes_comp_msg)) == -1) {
-                    perror("write");
-                    break;
-                }
+                if(write(client_fd, &msg, sizeof(aes_comp_msg)) == -1)
+                    errx(-1, "compartment write responding to AES_init_ctx_iv");
+
                 break;
             }
 
             case AES_COMP_MSG_SET_IV: {
+                // AES_ctx_set_iv
+
                 aes_comp_init_msg *init = &msg.msg.init;
                 AES_ctx_set_iv(&init->ctx, init->iv);
                 
-                if(write(client_fd, &msg, sizeof(aes_comp_msg)) == -1) {
-                    perror("write");
-                    break;
-                }
+                if(write(client_fd, &msg, sizeof(aes_comp_msg)) == -1)
+                    errx(-1, "compartment write responding to AES_ctx_set_iv");
+
                 break;
             }
 
-            case AES_COMP_MSG_ECB_ENCRYPT: {
-                // printf("received request for AES_ECB_encrypt\n");
+            case AES_COMP_MSG_CRYPT: {
+                // encryption/decryption request
+
                 aes_comp_crypt_msg *crypt = &msg.msg.crypt;
 
                 // allocate and receive buffer
                 buffer = malloc(crypt->buflen);
-                if(!buffer) {
-                    perror("malloc");
-                    break;
-                }
-
-                if (read(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("read");
-                    break;
-                }
-
-                AES_ECB_encrypt(&crypt->ctx, buffer);
-
-                // send result: we just need to send back the encrypted buffer 
-                if (write(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("write");
-                    break;
-                }
-
-                free(buffer);
-                break;
-            }
-
-            case AES_COMP_MSG_ECB_DECRYPT: {
-                // printf("received request for AES_ECB_decrypt\n");
-                aes_comp_crypt_msg *crypt = &msg.msg.crypt;
-
-                // allocate and receive buffer
-                buffer = malloc(crypt->buflen);
-                if(!buffer) {
-                    perror("malloc");
-                    break;
-                }
-
-                if (read(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("read");
-                    break;
-                }
-
-                AES_ECB_decrypt(&crypt->ctx, buffer);
-
-                // send decrypted buffer 
-                if (write(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("write");
-                    break;
-                }
-
-                free(buffer);
-                break;
-            }
-
-            case AES_COMP_MSG_CBC_ENCRYPT: {
-                // printf("received request for AES_CBC_encrypt\n");
-                aes_comp_crypt_msg *crypt = &msg.msg.crypt;
-
-                // allocate and receive buffer
-                buffer = malloc(crypt->buflen);
-                if(!buffer) {
-                    perror("malloc");
-                    break;
-                }
+                if(!buffer)
+                    errx(-1, "compartment encrypt/decrypt cannot allocate mem");
                 
-                if (read(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("read");
-                    break;
-                }
+                if (read(client_fd, buffer, crypt->buflen) == -1)
+                    errx(-1, "compartment encrypt/decrypt buffer read error");
 
-                AES_CBC_encrypt_buffer(&crypt->ctx, buffer, crypt->buflen);
+                // Call library function
+                switch(msg.msg.crypt.mode) {
+                    case AES_COMP_ECB_ENCRYPT:
+                        AES_ECB_encrypt(&crypt->ctx, buffer);
+                        break;
+                    case AES_COMP_ECB_DECRYPT:
+                        AES_ECB_decrypt(&crypt->ctx, buffer);
+                        break;
+                    case AES_COMP_CBC_ENCRYPT:
+                        AES_CBC_encrypt_buffer(&crypt->ctx, buffer, crypt->buflen);
+                        break;
+                    case AES_COMP_CBC_DECRYPT:
+                        AES_CBC_decrypt_buffer(&crypt->ctx, buffer, crypt->buflen);
+                        break;
+                    case AES_COMP_CTR_XCRYPT:
+                        AES_CTR_xcrypt_buffer(&crypt->ctx, buffer, crypt->buflen);
+                        break;
+                }
 
                 // send result ctx
-                if (write(client_fd, &msg, sizeof(aes_comp_msg)) == -1) {
-                    perror("write");
-                    break;
-                }
+                if (write(client_fd, &msg, sizeof(aes_comp_msg)) == -1)
+                    errx(-1, "compartment encrypt/decrypt header write");
 
                 // send encrypted buffer 
-                if (write(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("write");
-                    break;
-                }
-
-                free(buffer);
-                break;
-            }
-
-            case AES_COMP_MSG_CBC_DECRYPT: {
-                // printf("received request for AES_CBC_decrypt\n");
-                aes_comp_crypt_msg *crypt = &msg.msg.crypt;
-
-                // allocate and receive buffer
-                buffer = malloc(crypt->buflen);
-                if(!buffer) {
-                    perror("malloc");
-                    break;
-                }
-                
-                if (read(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("read");
-                    break;
-                }
-
-                AES_CBC_decrypt_buffer(&crypt->ctx, buffer, crypt->buflen);
-
-                // send result ctx
-                if (write(client_fd, &msg, sizeof(aes_comp_msg)) == -1) {
-                    perror("write");
-                    break;
-                }
-
-                // send encrypted buffer 
-                if (write(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("write");
-                    break;
-                }
-
-                free(buffer);
-                break;
-            }
-
-            case AES_COMP_MSG_CTR_XCRYPT: {
-                // printf("received request for AES_CTR_xcrypt\n");
-                aes_comp_crypt_msg *crypt = &msg.msg.crypt;
-
-                // allocate and receive buffer
-                buffer = malloc(crypt->buflen);
-                if(!buffer) {
-                    perror("malloc");
-                    break;
-                }
-                
-                if (read(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("read");
-                    break;
-                }
-
-                AES_CTR_xcrypt_buffer(&crypt->ctx, buffer, crypt->buflen);
-
-                // send result ctx
-                if (write(client_fd, &msg, sizeof(aes_comp_msg)) == -1) {
-                    perror("write");
-                    break;
-                }
-
-                // send encrypted buffer 
-                if (write(client_fd, buffer, crypt->buflen) == -1) {
-                    perror("write");
-                    break;
-                }
+                if (write(client_fd, buffer, crypt->buflen) == -1)
+                    errx(-1, "compartment encrypt/decrypt buffer write");
 
                 free(buffer);
                 break;
