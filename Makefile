@@ -22,7 +22,7 @@ INCLUDE_PATH = /usr/lib/avr/include
 # splint static check
 SPLINT       = splint test.c aes.c -I$(INCLUDE_PATH) +charindex -unrecog
 
-default: test.elf aes-comp
+default: test.elf benchmark-comp benchmark-native aes-comp
 
 # .SILENT:
 .PHONY:  lint clean
@@ -44,9 +44,21 @@ test.o : test.c aes.h aes-comp-client.h aes.o aes-comp-client.h
 	echo [CC] $@ $(CFLAGS)
 	$(CC) $(CFLAGS) -o  $@ $<
 
+benchmark.o : benchmark.c aes.h aes-comp-client.h aes.o aes-comp-client.h
+	echo [CC] $@ $(CFLAGS)
+	$(CC) $(CFLAGS) -o  $@ $<
+
 aes.o : aes.c aes.h
 	echo [CC] $@ $(CFLAGS)
 	$(CC) $(CFLAGS) -o $@ $<
+
+benchmark-comp: aes-comp-client.o benchmark.o
+	echo [LD] $@
+	$(LD) $(LDFLAGS) -o $@ $^
+
+benchmark-native: aes.o benchmark.o
+	echo [LD] $@
+	$(LD) $(LDFLAGS) -o $@ $^
 
 test.elf : aes-comp-client.o test.o
 	echo [LD] $@
@@ -59,7 +71,8 @@ aes.a : aes.o
 lib : aes.a
 
 clean:
-	rm -f *.OBJ *.LST *.o *.gch *.out *.hex *.map *.elf *.a
+	rm -f *.OBJ *.LST *.o *.gch *.out *.hex *.map *.elf *.a benchmark-comp \
+		benchmark-native aes-comp
 
 test:
 	make clean && make && ./test.elf
