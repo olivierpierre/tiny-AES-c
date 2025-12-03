@@ -22,7 +22,7 @@ INCLUDE_PATH = /usr/lib/avr/include
 # splint static check
 SPLINT       = splint test.c aes.c -I$(INCLUDE_PATH) +charindex -unrecog
 
-default: pierre-test aes-comp test.elf
+default: test.elf aes-comp
 
 # .SILENT:
 .PHONY:  lint clean
@@ -39,17 +39,11 @@ aes-comp: aes-comp.o aes.o
 aes-comp-client.o: aes-comp-client.c aes-comp.h
 	$(CC) $(CFLAGS) -o $@ $<
 
-pierre-test.o: pierre-test.c
-	$(CC) $(CFLAGS) -o $@ $<
-
-pierre-test: pierre-test.o aes-comp-client.o
-	$(CC) $^ -o $@ $(LDFLAGS)
-
 test.hex : test.elf
 	echo copy object-code to new image and format in hex
 	$(OBJCOPY) ${OBJCOPYFLAGS} $< $@
 
-test.o : test.c aes.h aes.o
+test.o : test.c aes.h aes-comp-client.h aes.o
 	echo [CC] $@ $(CFLAGS)
 	$(CC) $(CFLAGS) -o  $@ $<
 
@@ -57,7 +51,7 @@ aes.o : aes.c aes.h
 	echo [CC] $@ $(CFLAGS)
 	$(CC) $(CFLAGS) -o $@ $<
 
-test.elf : aes.o test.o
+test.elf : aes-comp-client.o test.o
 	echo [LD] $@
 	$(LD) $(LDFLAGS) -o $@ $^
 

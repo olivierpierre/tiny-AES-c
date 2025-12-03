@@ -64,10 +64,19 @@ int init_connection() {
     strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
     // Connect to the server
-    if (connect(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1) {
-        perror("connect");
-        close(sock);
-        return EXIT_FAILURE;
+    int timeout_us = 1000000; // 1 sec timeout
+    while (timeout_us) {
+        if (connect(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1) {
+            usleep(1000);
+            timeout_us -= 1000;
+            if(!timeout_us) {
+                perror("client connect");
+                close(sock);
+                return EXIT_FAILURE;
+            }
+        } else {
+            break;
+        }
     }
 
     return 0;
@@ -149,17 +158,18 @@ void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv)
     memcpy(msg.msg.init.key, key, AES_KEYLEN);
     memcpy(msg.msg.init.iv, iv, AES_BLOCKLEN);
 
-    if (write(sock, &msg, sizeof(msg)) == -1) {
+    if (write(sock, &msg, sizeof(aes_comp_msg)) == -1) {
         perror("write");
         exit(-1);
     }
 
-    if (read(sock, &msg, sizeof(msg)) == -1) {
+    if (read(sock, &msg, sizeof(aes_comp_msg)) == -1) {
         perror("read");
         exit(-1);
     }
 
-    memcpy(ctx, &msg.msg.init.ctx, sizeof(struct AES_ctx));
+    memcpy(ctx, &(msg.msg.init.ctx), sizeof(struct AES_ctx));
+
 }
 
 void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv) {
@@ -237,9 +247,8 @@ void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf) {
 
 void AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
     aes_comp_msg msg;
-    msg.type = AES_COMP_MSG_ECB_DECRYPT;
+    msg.type = AES_COMP_MSG_CBC_ENCRYPT;
     memcpy(&msg.msg.crypt.ctx, ctx, sizeof(struct AES_ctx));
-
     msg.msg.crypt.buflen = length;
 
     // send message
@@ -256,6 +265,70 @@ void AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
 
     // read response ctx: contrary to ECB this is needed here because the call
     // will update the IV which is part of ctx
+    if (read(sock, &msg, sizeof(msg)) == -1) {
+        perror("read");
+        exit(-1);
+    }
+    memcpy(ctx, &msg.msg.crypt.ctx, sizeof(struct AES_ctx));
+
+    // read response buffer
+    if (read(sock, buf, length) == -1) {
+        perror("read");
+        exit(-1);
+    }
+}
+
+void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+    aes_comp_msg msg;
+    msg.type = AES_COMP_MSG_CBC_DECRYPT;
+    memcpy(&msg.msg.crypt.ctx, ctx, sizeof(struct AES_ctx));
+    msg.msg.crypt.buflen = length;
+
+    // send message
+    if (write(sock, &msg, sizeof(msg)) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // send buffer
+    if (write(sock, buf, length) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // read response ctx
+    if (read(sock, &msg, sizeof(msg)) == -1) {
+        perror("read");
+        exit(-1);
+    }
+    memcpy(ctx, &msg.msg.crypt.ctx, sizeof(struct AES_ctx));
+
+    // read response buffer
+    if (read(sock, buf, length) == -1) {
+        perror("read");
+        exit(-1);
+    }
+}
+
+void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+    aes_comp_msg msg;
+    msg.type = AES_COMP_MSG_CTR_XCRYPT;
+    memcpy(&msg.msg.crypt.ctx, ctx, sizeof(struct AES_ctx));
+    msg.msg.crypt.buflen = length;
+
+    // send message
+    if (write(sock, &msg, sizeof(msg)) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // send buffer
+    if (write(sock, buf, length) == -1) {
+        perror("write");
+        exit(-1);
+    }
+
+    // read response ctx
     if (read(sock, &msg, sizeof(msg)) == -1) {
         perror("read");
         exit(-1);

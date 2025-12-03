@@ -1,3 +1,5 @@
+#include "aes-comp-client.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -7,9 +9,6 @@
 #define CBC 1
 #define CTR 1
 #define ECB 1
-
-#include "aes.h"
-
 
 static void phex(uint8_t* str);
 static int test_encrypt_cbc(void);
@@ -36,10 +35,9 @@ int main(void)
     return 0;
 #endif
 
-    // exit = test_encrypt_cbc() + test_decrypt_cbc() +
-	// test_encrypt_ctr() + test_decrypt_ctr() +
-	// test_decrypt_ecb() + test_encrypt_ecb(); 
-    exit = test_encrypt_ecb(); 
+    exit = test_encrypt_cbc() + test_decrypt_cbc() +
+	test_encrypt_ctr() + test_decrypt_ctr() +
+	test_decrypt_ecb() + test_encrypt_ecb(); 
     test_encrypt_ecb_verbose();
 
     return exit;
