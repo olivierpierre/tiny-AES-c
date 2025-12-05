@@ -1,3 +1,5 @@
+/benchmark-comp
+/benchmark-native
 /aes-comp
 /pierre-test
 /*.o

@@ -314,9 +314,9 @@ int main() {
                 // allocate and receive buffer
                 buffer = malloc(crypt->buflen);
                 if(!buffer)
-                    errx(-1, "compartment encrypt/decrypt cannot allocate mem");
+                    errx(-1, "compartment encrypt/decrypt cannot allocate mem (%lu bytes)", crypt->buflen);
                 
-                // buffer can be big enough to require several calls to read()
+                // buffer can be large enough to require several calls to read()
                 int left_to_read = crypt->buflen;
                 while(left_to_read) {
                     int bytes_read = read(client_fd, buffer, crypt->buflen);
@@ -362,10 +362,16 @@ int main() {
                 if (write(client_fd, &msg, sizeof(aes_comp_msg)) == -1)
                     errx(-1, "compartment encrypt/decrypt header write");
 
-                // send encrypted buffer if the operation was asuccess
-                if(!crypt->result)
-                    if (write(client_fd, buffer, crypt->buflen) == -1)
+                // send encrypted buffer 
+                int to_send = crypt->buflen;
+                while(to_send) {
+                    int sent = write(client_fd, buffer, crypt->buflen);
+
+                    if(sent == -1)
                         errx(-1, "compartment encrypt/decrypt buffer write");
+
+                    to_send -= sent;
+                }
 
                 free(buffer);
                 break;
