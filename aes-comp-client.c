@@ -159,7 +159,7 @@ void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv) {
     memcpy(ctx, &msg.msg.init.ctx, sizeof(struct AES_ctx));
 }
 
-void do_generic_crypt(aes_comp_crypt_mode mode, struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+int do_generic_crypt(aes_comp_crypt_mode mode, struct AES_ctx* ctx, uint8_t* buf, size_t length) {
     aes_comp_msg msg;
     msg.type = AES_COMP_MSG_CRYPT;
     memcpy(&msg.msg.crypt.ctx, ctx, sizeof(struct AES_ctx));
@@ -181,27 +181,30 @@ void do_generic_crypt(aes_comp_crypt_mode mode, struct AES_ctx* ctx, uint8_t* bu
     memcpy(ctx, &msg.msg.crypt.ctx, sizeof(struct AES_ctx));
 
     // read response buffer
-    if (read(sock, buf, length) == -1)
-        errx(-1, "client crypt request read buffer");
+    if(!msg.msg.crypt.result)
+        if (read(sock, buf, length) == -1)
+            errx(-1, "client crypt request read buffer");
+
+    return msg.msg.crypt.result;
 }
 
-void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf) {
+int AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf) {
     // with ECB bufsize is always AES_BLOCKLEN
-    do_generic_crypt(AES_COMP_ECB_ENCRYPT, (struct AES_ctx*) ctx, buf, AES_BLOCKLEN);
+    return do_generic_crypt(AES_COMP_ECB_ENCRYPT, (struct AES_ctx*) ctx, buf, AES_BLOCKLEN);
 }
 
-void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf) {
-    do_generic_crypt(AES_COMP_ECB_DECRYPT, (struct AES_ctx*) ctx, buf, AES_BLOCKLEN);
+int AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf) {
+    return do_generic_crypt(AES_COMP_ECB_DECRYPT, (struct AES_ctx*) ctx, buf, AES_BLOCKLEN);
 }
 
-void AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
-    do_generic_crypt(AES_COMP_CBC_ENCRYPT, ctx, buf, length);
+int AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+    return do_generic_crypt(AES_COMP_CBC_ENCRYPT, ctx, buf, length);
 }
 
-void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
-    do_generic_crypt(AES_COMP_CBC_DECRYPT, ctx, buf, length);
+int AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+    return do_generic_crypt(AES_COMP_CBC_DECRYPT, ctx, buf, length);
 }
 
-void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
-    do_generic_crypt(AES_COMP_CTR_XCRYPT, ctx, buf, length);
+int AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length) {
+    return do_generic_crypt(AES_COMP_CTR_XCRYPT, ctx, buf, length);
 }

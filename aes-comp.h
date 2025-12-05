@@ -18,7 +18,8 @@ typedef enum {
     AES_COMP_MSG_INIT_IV,
     AES_COMP_MSG_SET_IV,
     AES_COMP_MSG_CRYPT, // factorize all encrypt/decrypt operations
-    AES_COMP_MSG_EXIT
+    AES_COMP_MSG_EXIT,
+    AES_COMP_MSG_NUM
 } aes_comp_msg_t;
 
 // Message used for initialization functions: AES_init_ctx, AES_init_ctx_iv, 
@@ -36,7 +37,8 @@ typedef enum {
     AES_COMP_ECB_DECRYPT,
     AES_COMP_CBC_ENCRYPT,
     AES_COMP_CBC_DECRYPT,
-    AES_COMP_CTR_XCRYPT
+    AES_COMP_CTR_XCRYPT,
+    AES_COMP_CRYPT_NUM
 } aes_comp_crypt_mode;
 
 // encrypt/decrypt is a two phase operation: first we send this message
@@ -48,6 +50,7 @@ typedef struct {
     struct AES_ctx ctx;
     size_t buflen;
     aes_comp_crypt_mode mode;
+    int result; // denotes the success/failure of the operation
 } aes_comp_crypt_msg;
 
 // Generic message
