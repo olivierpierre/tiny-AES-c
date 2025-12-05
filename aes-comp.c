@@ -96,10 +96,18 @@ int main() {
                 // allocate and receive buffer
                 buffer = malloc(crypt->buflen);
                 if(!buffer)
-                    errx(-1, "compartment encrypt/decrypt cannot allocate mem");
+                    errx(-1, "compartment encrypt/decrypt cannot allocate mem (%lu bytes)", crypt->buflen);
                 
-                if (read(client_fd, buffer, crypt->buflen) == -1)
-                    errx(-1, "compartment encrypt/decrypt buffer read error");
+                // buffer can be large enough to require several calls to read()
+                int left_to_read = crypt->buflen;
+                while(left_to_read) {
+                    int bytes_read = read(client_fd, buffer, crypt->buflen);
+
+                    if(bytes_read == -1)
+                        errx(-1, "compartment encrypt/decrypt buffer read error");
+
+                    left_to_read -= bytes_read;
+                }
 
                 // Call library function
                 switch(msg.msg.crypt.mode) {
@@ -125,8 +133,15 @@ int main() {
                     errx(-1, "compartment encrypt/decrypt header write");
 
                 // send encrypted buffer 
-                if (write(client_fd, buffer, crypt->buflen) == -1)
-                    errx(-1, "compartment encrypt/decrypt buffer write");
+                int to_send = crypt->buflen;
+                while(to_send) {
+                    int sent = write(client_fd, buffer, crypt->buflen);
+
+                    if(sent == -1)
+                        errx(-1, "compartment encrypt/decrypt buffer write");
+
+                    to_send -= sent;
+                }
 
                 free(buffer);
                 break;
